@@ -1,14 +1,13 @@
 ﻿// -----------------------------------------------------------------------
-//   <copyright file="Template.cs" company="Asynkron HB">
-//       Copyright (C) 2015-2018 Asynkron HB All rights reserved
-//   </copyright>
+// <copyright file="Template.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
+// </copyright>
 // -----------------------------------------------------------------------
-
 namespace ProtoBuf
 {
     public static class Template
     {
-        public static string Code = @"
+        public const string Code = @"
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,18 +18,24 @@ using Proto.Remote;
 
 namespace {{CsNamespace}}
 {
-    public static class Grains
+    public class Grains
     {
-		{{#each Services}}	
-        internal static Func<I{{Name}}> _{{Name}}Factory;
+        public Cluster Cluster { get; }
 
-        public static void {{Name}}Factory(Func<I{{Name}}> factory) 
+        public Grains(Cluster cluster) => Cluster = cluster;
+
+		{{#each Services}}	
+        internal Func<string, I{{Name}}> Get{{Name}} { get; private set; }
+
+        public void {{Name}}Factory(Func<string, I{{Name}}> factory) 
         {
-            _{{Name}}Factory = factory;
-            Remote.RegisterKnownKind(""{{Name}}"", Props.FromProducer(() => new {{Name}}Actor()));
+            Get{{Name}} = factory;
+            Cluster.Remote.RegisterKnownKind(""{{Name}}"", Props.FromProducer(() => new {{Name}}Actor(this)));
         } 
 
-        public static {{Name}}Client {{Name}}(string id) => new {{Name}}Client(id);
+        public void {{Name}}Factory(Func<I{{Name}}> factory) => {{Name}}Factory(id => factory());
+
+        public {{Name}}Client {{Name}}(string id) => new {{Name}}Client(Cluster, id);
 		{{/each}}
     }
 
@@ -45,10 +50,12 @@ namespace {{CsNamespace}}
     public class {{Name}}Client
     {
         private readonly string _id;
+        private readonly Cluster _cluster;
 
-        public {{Name}}Client(string id)
+        public {{Name}}Client(Cluster cluster, string id)
         {
             _id = id;
+            _cluster = cluster;
         }
 
 		{{#each Methods}}
@@ -56,7 +63,7 @@ namespace {{CsNamespace}}
 
         public async Task<{{OutputName}}> {{Name}}({{InputName}} request, CancellationToken ct, GrainCallOptions options = null)
         {
-            options = options ?? GrainCallOptions.Default;
+            options ??= GrainCallOptions.Default;
             
             var gr = new GrainRequest
             {
@@ -66,38 +73,27 @@ namespace {{CsNamespace}}
 
             async Task<{{OutputName}}> Inner() 
             {
-                //resolve the grain
-                var (pid, statusCode) = await Cluster.GetAsync(_id, ""{{../Name}}"", ct);
-
-                if (statusCode != ResponseStatusCode.OK)
-                {
-                    throw new Exception($""Get PID failed with StatusCode: {statusCode}"");  
-                }
-
                 //request the RPC method to be invoked
-                var res = await pid.RequestAsync<object>(gr, ct);
+                var res = await _cluster.RequestAsync<object>(_id, ""{{../Name}}"", gr, ct);
 
-                //did we get a response?
-                if (res is GrainResponse grainResponse)
+                return res switch
                 {
-                    return {{OutputName}}.Parser.ParseFrom(grainResponse.MessageData);
-                }
-
-                //did we get an error response?
-                if (res is GrainErrorResponse grainErrorResponse)
-                {
-                    throw new Exception(grainErrorResponse.Err);
-                }
-                throw new NotSupportedException();
+                    // normal response
+                    GrainResponse grainResponse => HelloResponse.Parser.ParseFrom(grainResponse.MessageData),
+                    // error response
+                    GrainErrorResponse grainErrorResponse => throw new Exception(grainErrorResponse.Err),
+                    // unsupported response
+                    _ => throw new NotSupportedException()
+                };
             }
 
-            for(int i= 0;i < options.RetryCount; i++)
+            for (int i = 0; i < options.RetryCount; i++)
             {
                 try
                 {
                     return await Inner();
                 }
-                catch(Exception x)
+                catch (Exception)
                 {
                     if (options.RetryAction != null)
                     {
@@ -113,6 +109,14 @@ namespace {{CsNamespace}}
     public class {{Name}}Actor : IActor
     {
         private I{{Name}} _inner;
+        private readonly Grains _grains;
+
+        public {{Name}}Actor(Grains grains) => _grains = grains;
+        private string _identity;
+        private string _kind;
+
+        protected string Identity => _identity;
+        protected string Kind => _kind;
 
         public async Task ReceiveAsync(IContext context)
         {
@@ -120,13 +124,19 @@ namespace {{CsNamespace}}
             {
                 case Started _:
                 {
-                    _inner = Grains._{{Name}}Factory();
+                    _inner = _grains.Get{{Name}}(context.Self!.Id);
                     context.SetReceiveTimeout(TimeSpan.FromSeconds(30));
+                    break;
+                }
+                case GrainInit msg: 
+                {
+                    _identity = msg.Identity;
+                    _kind = msg.Kind;
                     break;
                 }
                 case ReceiveTimeout _:
                 {
-                    context.Self.Stop();
+                    context.Stop(context.Self!);
                     break;
                 }
                 case GrainRequest request:

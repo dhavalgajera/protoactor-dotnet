@@ -1,9 +1,8 @@
 ﻿// -----------------------------------------------------------------------
-//   <copyright file="GrainGen.cs" company="Asynkron HB">
-//       Copyright (C) 2015-2018 Asynkron HB All rights reserved
-//   </copyright>
+// <copyright file="GrainGen.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
+// </copyright>
 // -----------------------------------------------------------------------
-
 using System;
 using System.Linq;
 using Google.Protobuf.Reflection;
@@ -15,17 +14,16 @@ namespace GrainGenerator
 {
     public class GrainGen : CommonCodeGenerator
     {
-        public override string Name { get; }
+        public override string Name { get; } = "Proto.Grain";
+
         protected override string DefaultFileExtension => ".cs";
 
-        protected override string Escape(string identifier)
-        {
-            return identifier;
-        }
+        protected override string Escape(string identifier) => identifier;
 
         protected override void WriteFile(GeneratorContext ctx, FileDescriptorProto obj)
         {
             var file = ctx.File;
+
             var ast = new ProtoFile
             {
                 PackageName = file.Package,
@@ -33,37 +31,56 @@ namespace GrainGenerator
                 Messages = file
                     .MessageTypes
                     .ToArray()
-                    .Select(mt => new ProtoMessage { Name = mt.Name })
+                    .Select(mt => new ProtoMessage {Name = mt.Name})
                     .ToArray(),
                 Services = file
                     .Services
                     .ToArray()
-                    .Select(s => new ProtoService
-                    {
-                        Name = s.Name,
-                        Methods = s.Methods.ToArray().Select((m, i) => new ProtoMethod
+                    .Select(
+                        s => new ProtoService
                         {
-                            Index = i,
-                            Name = m.Name,
-                            InputName = RemovePackageName(m.InputType),
-                            OutputName = RemovePackageName(m.OutputType),
-                        }).ToArray()
-                    })
+                            Name = s.Name,
+                            Methods = s.Methods.ToArray()
+                                .Select(
+                                    (m, i) => new ProtoMethod
+                                    {
+                                        Index = i,
+                                        Name = m.Name,
+                                        InputName = RemovePackageName(m.InputType),
+                                        OutputName = RemovePackageName(m.OutputType)
+                                    }
+                                )
+                                .ToArray()
+                        }
+                    )
                     .ToArray()
             };
             var f = Handlebars.Compile(Template.Code);
 
             var result = f(ast);
             ctx.WriteLine(result);
+
+            static string RemovePackageName(ReadOnlySpan<char> type)
+            {
+                var index = type.LastIndexOf('.');
+                return type.Slice(index + 1).ToString();
+            }
         }
 
-        private string RemovePackageName(string type)
+        #region UnusedMethods
+
+        protected override void WriteNamespaceHeader(GeneratorContext ctx, string @namespace)
         {
-            var parts = type.Split('.');
-            return parts.Last();
+            throw new NotImplementedException();
         }
 
-        protected override void WriteField(GeneratorContext ctx, FieldDescriptorProto obj, ref object state, OneOfStub[] oneOfs)
+        protected override void WriteNamespaceFooter(GeneratorContext ctx, string @namespace)
+        {
+            throw new NotImplementedException();
+        }
+
+        protected override void WriteField(GeneratorContext ctx, FieldDescriptorProto obj, ref object state,
+            OneOfStub[] oneOfs)
         {
             throw new NotImplementedException();
         }
@@ -92,5 +109,7 @@ namespace GrainGenerator
         {
             throw new NotImplementedException();
         }
+
+        #endregion
     }
 }

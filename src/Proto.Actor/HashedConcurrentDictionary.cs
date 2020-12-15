@@ -1,11 +1,11 @@
 ﻿// -----------------------------------------------------------------------
-//   <copyright file="HashedConcurrentDictionary.cs" company="Asynkron HB">
-//       Copyright (C) 2015-2018 Asynkron HB All rights reserved
-//   </copyright>
+// <copyright file="HashedConcurrentDictionary.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
+// </copyright>
 // -----------------------------------------------------------------------
-
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Proto
 {
@@ -13,6 +13,9 @@ namespace Proto
     {
         private const int HashSize = 1024;
         private readonly Partition[] _partitions = new Partition[HashSize];
+
+        private int _count;
+//        public int Count => _partitions.Select(partition => partition.Count).Sum();
 
         internal HashedConcurrentDictionary()
         {
@@ -22,20 +25,11 @@ namespace Proto
             }
         }
 
-//        static ulong CalculateHash(string read)
-//        {
-//            var hashedValue = 3074457345618258791ul;
-//            for (var i = 0; i < read.Length; i++)
-//            {
-//                hashedValue += read[i];
-//                hashedValue *= 3074457345618258799ul;
-//            }
-//            return hashedValue;
-//        }
+        public int Count => _count;
 
         private Partition GetPartition(string key)
         {
-            var hash = Math.Abs(key.GetHashCode()) % HashSize;
+            var hash = key.GetHashCode() & 0x7FFFFFFF % HashSize;
             var p = _partitions[hash];
             return p;
         }
@@ -45,11 +39,10 @@ namespace Proto
             var p = GetPartition(key);
             lock (p)
             {
-                if (p.ContainsKey(key))
-                {
-                    return false;
-                }
+                if (p.ContainsKey(key)) return false;
+
                 p.Add(key, reff);
+                Interlocked.Increment(ref _count);
                 return true;
             }
         }
@@ -68,11 +61,12 @@ namespace Proto
             var p = GetPartition(key);
             lock (p)
             {
-                p.Remove(key);
+                if (p.Remove(key)) Interlocked.Decrement(ref _count);
             }
         }
 
-        public class Partition : Dictionary<string, Process>
-        {}
+        private class Partition : Dictionary<string, Process>
+        {
+        }
     }
 }

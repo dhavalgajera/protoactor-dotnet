@@ -5,9 +5,14 @@
 # Proto.Actor
 Ultra-fast, distributed, cross-platform actors.
 
+## Bootcamp Training
+
+[https://github.com/AsynkronIT/protoactor-bootcamp](https://github.com/AsynkronIT/protoactor-bootcamp)
+
 ## Installing
 
 Using NuGet Package Manager Console:
+
 `PM> Install-Package Proto.Actor`
 
 ## Source code
@@ -15,14 +20,6 @@ This is the .NET repository for Proto Actor.
 
 Other implementations:
 * Go: [https://github.com/AsynkronIT/protoactor-go](https://github.com/AsynkronIT/protoactor-go)
-* Python (unstable/WIP): [https://github.com/AsynkronIT/protoactor-python](https://github.com/AsynkronIT/protoactor-python)
-* JavaScript (unstable/WIP): [https://github.com/AsynkronIT/protoactor-js](https://github.com/AsynkronIT/protoactor-js)
-
-## How to build
-
-Proto.Actor uses and requires the VS2017 build system in order to build. You can either use the `dotnet` CLI commands, or use Visual Studio 2017.
-
-We also use [Cake](http://cakebuild.net/) for orchestrating the CI builds. The CI build basically runs `dotnet restore`, `dotnet build`, `dotnet test` and `dotnet pack`. To run a full CI build execute either `.\build.ps1` or `./build.sh`, depending on your environment.
 
 ## Design principles
 
@@ -43,10 +40,7 @@ The best place currently for learning how to use Proto.Actor is the [examples](h
 Define a message type:
 
 ```csharp
-internal class Hello
-{
-    public string Who;
-}
+internal record Hello(string Who);
 ```
 
 Define an actor:
@@ -61,7 +55,7 @@ internal class HelloActor : IActor
         {
             Console.WriteLine($"Hello {r.Who}");
         }
-        return Actor.Done;
+        return Task.CompletedTask;
     }
 }
 ```
@@ -69,15 +63,24 @@ internal class HelloActor : IActor
 Spawn it and send a message to it:
 
 ```csharp
-var props = Actor.FromProducer(() => new HelloActor());
-var pid = Actor.Spawn(props);
-pid.Tell(new Hello
-{
-    Who = "Alex"
-});
+var system = new ActorSystem();
+var context = system.Root;
+var props = Props.FromProducer(() => new HelloActor());
+var pid = context.Spawn(props);
+
+context.Send(pid, new Hello("Alex"));
 ```
 
 You should see the output `Hello Alex`.
+
+
+## Contributors
+
+<a href="https://github.com/AsynkronIT/protoactor-dotnet/graphs/contributors">
+  <img src="https://contributors-img.firebaseapp.com/image?repo=AsynkronIT/protoactor-dotnet" />
+</a>
+
+Made with [contributors-img](https://contributors-img.firebaseapp.com).
 
 ### Support
 

@@ -1,41 +1,22 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
+// -----------------------------------------------------------------------
+// <copyright file="Program.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
+// </copyright>
+// -----------------------------------------------------------------------
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Hosting.Server;
-using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Hosting;
 
 namespace DependencyInjection
 {
-    class Program
+    public class Program
     {
-        public class NullServer : IServer
+        public static void Main(string[] args)
         {
-            public void Dispose()
-            {
-            }
-
-            public Task StartAsync<TContext>(IHttpApplication<TContext> application, CancellationToken cancellationToken)
-            {
-                return Task.CompletedTask;
-            }
-
-            public Task StopAsync(CancellationToken cancellationToken)
-            {
-                return Task.CompletedTask;
-            }
-
-            public IFeatureCollection Features => new FeatureCollection();
+            CreateHostBuilder(args).Build().Run();
         }
 
-        static void Main(string[] args)
-        {
-            var host = new WebHostBuilder()
-                .UseServer(new NullServer())
-                .UseStartup<Startup>()
-                .Build();
-
-            host.Run();
-        }
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
+                .ConfigureWebHostDefaults(webBuilder => { webBuilder.UseStartup<Startup>(); });
     }
 }

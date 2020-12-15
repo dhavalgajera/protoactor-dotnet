@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------
-//   <copyright file="RemoteProcess.cs" company="Asynkron HB">
-//       Copyright (C) 2015-2018 Asynkron HB All rights reserved
+//   <copyright file="RemoteProcess.cs" company="Asynkron AB">
+//       Copyright (C) 2015-2020 Asynkron AB All rights reserved
 //   </copyright>
 // -----------------------------------------------------------------------
 
@@ -8,10 +8,12 @@ namespace Proto.Remote
 {
     public class RemoteProcess : Process
     {
+        private readonly EndpointManager _endpointManager;
         private readonly PID _pid;
 
-        public RemoteProcess(PID pid)
+        public RemoteProcess(ActorSystem system, EndpointManager endpointManager, PID pid) : base(system)
         {
+            _endpointManager = endpointManager;
             _pid = pid;
         }
 
@@ -21,20 +23,35 @@ namespace Proto.Remote
 
         private void Send(object msg)
         {
-            if (msg is Watch w)
+            switch (msg)
             {
-                var rw = new RemoteWatch(w.Watcher, _pid);
-                EndpointManager.RemoteWatch(rw);
+                case Watch w:
+                    Watch(w);
+                    break;
+                case Unwatch uw:
+                    Unwatch(uw);
+                    break;
+                default:
+                    SendMessage(msg);
+                    break;
             }
-            else if (msg is Unwatch uw)
-            {
-                var ruw = new RemoteUnwatch(uw.Watcher, _pid);
-                EndpointManager.RemoteUnwatch(ruw);
-            }
-            else
-            {
-                Remote.SendMessage(_pid, msg,-1);
-            }
+        }
+
+        private void SendMessage(object msg)
+        {
+            _endpointManager.SendMessage(_pid, msg, -1);
+        }
+
+        private void Unwatch(Unwatch uw)
+        {
+            var ruw = new RemoteUnwatch(uw.Watcher, _pid);
+            _endpointManager.RemoteUnwatch(ruw);
+        }
+
+        private void Watch(Watch w)
+        {
+            var rw = new RemoteWatch(w.Watcher, _pid);
+            _endpointManager.RemoteWatch(rw);
         }
     }
 }

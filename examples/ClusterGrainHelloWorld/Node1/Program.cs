@@ -1,48 +1,57 @@
 ﻿// -----------------------------------------------------------------------
-//   <copyright file="Program.cs" company="Asynkron HB">
-//       Copyright (C) 2015-2018 Asynkron HB All rights reserved
-//   </copyright>
+// <copyright file="Program.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
+// </copyright>
 // -----------------------------------------------------------------------
-
 using System;
-using System.Diagnostics;
+using System.Threading.Tasks;
 using Messages;
+using Proto;
 using Proto.Cluster;
 using Proto.Cluster.Consul;
+using Proto.Cluster.Partition;
 using Proto.Remote;
+using Proto.Remote.GrpcCore;
 using ProtosReflection = Messages.ProtosReflection;
 
-class Program
+internal class Program
 {
-    static void Main(string[] args)
+    private static async Task Main(string[] args)
     {
-        StartConsulDevMode();
-        Serialization.RegisterFileDescriptor(ProtosReflection.Descriptor);
+        var remoteConfig = GrpcCoreRemoteConfig
+            .BindToLocalhost()
+            .WithProtoMessages(ProtosReflection.Descriptor);
 
-        Cluster.Start("MyCluster", "127.0.0.1", 12001, new ConsulProvider(new ConsulProviderOptions()));
+        var consulProvider =
+            new ConsulProvider(new ConsulProviderConfig(), c => c.Address = new Uri("http://consul:8500/"));
 
-        var client = Grains.HelloGrain("Roger");
+        var clusterConfig =
+            ClusterConfig
+                .Setup("MyCluster", consulProvider, new PartitionIdentityLookup());
 
-        var res = client.SayHello(new HelloRequest()).Result;
+        var system = new ActorSystem()
+            .WithRemote(remoteConfig)
+            .WithCluster(clusterConfig);
+
+        await system
+            .Cluster()
+            .StartMemberAsync();
+
+        await Task.Delay(2000);
+
+        var grains = new Grains(system.Cluster());
+        var client = grains.HelloGrain("Roger");
+
+        var res = await client.SayHello(new HelloRequest());
         Console.WriteLine(res.Message);
-        Console.ReadLine();
-        res = client.SayHello(new HelloRequest()).Result;
-        Console.WriteLine(res.Message);
-        Console.ReadLine();
-        Console.WriteLine("Shutting Down...");
-        Cluster.Shutdown();
-    }
 
-    private static void StartConsulDevMode()
-    {
-        Console.WriteLine("Consul - Starting");
-        ProcessStartInfo psi =
-            new ProcessStartInfo(@"..\..\..\dependencies\consul",
-                "agent -server -bootstrap -data-dir /tmp/consul -bind=127.0.0.1 -ui")
-            {
-                CreateNoWindow = true,
-            };
-        Process.Start(psi);
-        Console.WriteLine("Consul - Started");
+        res = await client.SayHello(new HelloRequest());
+        Console.WriteLine(res.Message);
+        Console.CancelKeyPress += async (e, y) =>
+        {
+            Console.WriteLine("Shutting Down...");
+            await system.Cluster().ShutdownAsync();
+        };
+        await Task.Delay(-1);
     }
 }

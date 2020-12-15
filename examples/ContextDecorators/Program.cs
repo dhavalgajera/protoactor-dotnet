@@ -1,4 +1,9 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+// <copyright file="Program.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
+// </copyright>
+// -----------------------------------------------------------------------
+using System;
 using System.Threading.Tasks;
 using Proto;
 
@@ -18,7 +23,7 @@ namespace ContextDecorators
             return res;
         }
     }
-    
+
     public class LoggingDecorator : ActorContextDecorator
     {
         private readonly string _loggerName;
@@ -36,23 +41,25 @@ namespace ContextDecorators
             Console.WriteLine($"{_loggerName} : Exit Respond");
         }
     }
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            var context = new LoggingRootDecorator(new RootContext());
-            var props = Props.FromFunc(ctx =>
-                {
-                    if (ctx.Message is string str)
-                    {
-                        Console.WriteLine("Inside Actor: " + str);
-                        ctx.Respond("Yo!");
-                    }
 
-                    return Actor.Done;
-                })
-                .WithContextDecorator(c => new LoggingDecorator(c, "logger1"))
-                .WithContextDecorator(c => new LoggingDecorator(c, "logger2"))
+    internal class Program
+    {
+        private static void Main(string[] args)
+        {
+            var context = new LoggingRootDecorator(new RootContext(new ActorSystem()));
+            var props = Props.FromFunc(ctx =>
+                        {
+                            if (ctx.Message is string str)
+                            {
+                                Console.WriteLine("Inside Actor: " + str);
+                                ctx.Respond("Yo!");
+                            }
+
+                            return Task.CompletedTask;
+                        }
+                    )
+                    .WithContextDecorator(c => new LoggingDecorator(c, "logger1"))
+                    .WithContextDecorator(c => new LoggingDecorator(c, "logger2"))
                 ;
 
             var pid = context.Spawn(props);

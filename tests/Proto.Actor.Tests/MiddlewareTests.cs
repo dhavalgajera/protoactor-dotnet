@@ -1,6 +1,6 @@
 ﻿// -----------------------------------------------------------------------
-//  <copyright file="MiddlewareTests.cs" company="Asynkron HB">
-//      Copyright (C) 2015-2018 Asynkron HB All rights reserved
+//  <copyright file="MiddlewareTests.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
 //  </copyright>
 // -----------------------------------------------------------------------
 
@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Proto.Tests
 {
-    class TestContextDecorator : ActorContextDecorator
+    internal class TestContextDecorator : ActorContextDecorator
     {
         private readonly List<string> _logs;
 
@@ -36,8 +36,8 @@ namespace Proto.Tests
 
     public class MiddlewareTests
     {
-        private static readonly RootContext Context = new RootContext();
-
+        private static readonly ActorSystem System = new();
+        private static readonly RootContext Context = System.Root;
 
         [Fact]
         public void Given_ContextDecorator_Should_Call_Decorator_Before_Actor_Receive()
@@ -48,17 +48,18 @@ namespace Proto.Tests
 
             var testMailbox = new TestMailbox();
             var props = Props.FromFunc(c =>
-                {
-                    switch (c.Message)
                     {
-                        //only inspect "decorator" message
-                        case string str when str == "decorator":
-                            logs.Add("actor");
-                            return Actor.Done;
-                        default:
-                            return Actor.Done;
+                        switch (c.Message)
+                        {
+                            //only inspect "decorator" message
+                            case string str when str == "decorator":
+                                logs.Add("actor");
+                                return Task.CompletedTask;
+                            default:
+                                return Task.CompletedTask;
+                        }
                     }
-                })
+                )
                 .WithMailbox(() => testMailbox)
                 .WithContextDecorator(c => new TestContextDecorator(c, logs), c => new TestContextDecorator(c, logs2))
                 .WithContextDecorator(c => new TestContextDecorator(c, logs3));
@@ -70,31 +71,32 @@ namespace Proto.Tests
             Assert.Equal("decorator", logs[0]);
             Assert.Equal("actor", logs[1]);
 
-            foreach (var log in new[] { logs2, logs3 })
+            foreach (var log in new[] {logs2, logs3})
             {
                 Assert.Single(log);
                 Assert.Equal("decorator", log[0]);
             }
         }
 
-
         [Fact]
-        public void Given_ReceiverMiddleware_and_ContextDecorator_Should_Call_Middleware_and_Decorator_Before_Actor_Receive()
+        public void
+            Given_ReceiverMiddleware_and_ContextDecorator_Should_Call_Middleware_and_Decorator_Before_Actor_Receive()
         {
             var logs = new List<string>();
             var testMailbox = new TestMailbox();
             var props = Props.FromFunc(c =>
-                {
-                    switch (c.Message)
                     {
-                        //only inspect "decorator" message
-                        case string str when str == "decorator":
-                            logs.Add("actor");
-                            return Actor.Done;
-                        default:
-                            return Actor.Done;
+                        switch (c.Message)
+                        {
+                            //only inspect "decorator" message
+                            case string str when str == "decorator":
+                                logs.Add("actor");
+                                return Task.CompletedTask;
+                            default:
+                                return Task.CompletedTask;
+                        }
                     }
-                })
+                )
                 .WithReceiverMiddleware(
                     next => async (c, env) =>
                     {
@@ -107,7 +109,8 @@ namespace Proto.Tests
                         }
 
                         await next(c, env);
-                    })
+                    }
+                )
                 .WithMailbox(() => testMailbox)
                 .WithContextDecorator(c => new TestContextDecorator(c, logs));
             var pid = Context.Spawn(props);
@@ -128,11 +131,12 @@ namespace Proto.Tests
             var logs = new List<string>();
             var testMailbox = new TestMailbox();
             var props = Props.FromFunc(c =>
-                {
-                    if (c.Message is string)
-                        logs.Add("actor");
-                    return Actor.Done;
-                })
+                    {
+                        if (c.Message is string)
+                            logs.Add("actor");
+                        return Task.CompletedTask;
+                    }
+                )
                 .WithReceiverMiddleware(
                     next => async (c, env) =>
                     {
@@ -145,7 +149,8 @@ namespace Proto.Tests
                         if (env.Message is string)
                             logs.Add("middleware 2");
                         await next(c, env);
-                    })
+                    }
+                )
                 .WithMailbox(() => testMailbox);
             var pid = Context.Spawn(props);
 
@@ -163,11 +168,12 @@ namespace Proto.Tests
             var logs = new List<string>();
             var pid1 = Context.Spawn(Props.FromProducer(() => new DoNothingActor()));
             var props = Props.FromFunc(c =>
-                {
-                    if (c.Message is string)
-                        c.Send(pid1, "hey");
-                    return Actor.Done;
-                })
+                    {
+                        if (c.Message is string)
+                            c.Send(pid1, "hey");
+                        return Task.CompletedTask;
+                    }
+                )
                 .WithSenderMiddleware(
                     next => (c, t, e) =>
                     {
@@ -180,7 +186,8 @@ namespace Proto.Tests
                         if (c.Message is string)
                             logs.Add("middleware 2");
                         return next(c, t, e);
-                    })
+                    }
+                )
                 .WithMailbox(() => new TestMailbox());
             var pid2 = Context.Spawn(props);
 

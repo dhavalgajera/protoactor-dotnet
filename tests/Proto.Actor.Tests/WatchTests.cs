@@ -8,51 +8,59 @@ namespace Proto.Tests
 {
     public class WatchTests
     {
-        private static readonly RootContext Context = new RootContext();
-        
+        private static readonly ActorSystem System = new();
+        private static readonly RootContext Context = System.Root;
+
         [Fact]
         public async Task MultipleStopsTriggerSingleTerminated()
         {
-            int counter = 0;
+            var counter = 0;
             var childProps = Props.FromFunc(context =>
-            {
-                switch (context.Message)
                 {
-                    case Started _:
-                        context.Self.Stop();
-                        context.Self.Stop();
-                        break;
+                    switch (context.Message)
+                    {
+                        case Started _:
+                            context.Stop(context.Self);
+                            context.Stop(context.Self);
+                            break;
+                    }
+
+                    return Task.CompletedTask;
                 }
-                return Actor.Done;
-            });
+            );
 
             Context.Spawn(Props.FromFunc(context =>
-            {
-                switch (context.Message)
-                {
-                    case Started _:
-                        context.Spawn(childProps);
-                        break;
-                    case Terminated _:
-                        Interlocked.Increment(ref counter);
-                        break;
-                }
-                return Actor.Done;
-            }));
+                    {
+                        switch (context.Message)
+                        {
+                            case Started _:
+                                context.Spawn(childProps);
+                                break;
+                            case Terminated _:
+                                Interlocked.Increment(ref counter);
+                                break;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                )
+            );
 
             await Task.Delay(1000);
-            Assert.Equal(1,counter);
-
+            Assert.Equal(1, counter);
         }
+
         [Fact]
         public async void CanWatchLocalActors()
         {
             var watchee = Context.Spawn(Props.FromProducer(() => new DoNothingActor())
-                                           .WithMailbox(() => new TestMailbox()));
+                .WithMailbox(() => new TestMailbox())
+            );
             var watcher = Context.Spawn(Props.FromProducer(() => new LocalActor(watchee))
-                                           .WithMailbox(() => new TestMailbox()));
+                .WithMailbox(() => new TestMailbox())
+            );
 
-            await watchee.StopAsync();
+            await Context.StopAsync(watchee);
             var terminatedMessageReceived = await Context.RequestAsync<bool>(watcher, "?", TimeSpan.FromSeconds(5));
             Assert.True(terminatedMessageReceived);
         }
@@ -81,7 +89,8 @@ namespace Proto.Tests
                         _terminateReceived = true;
                         break;
                 }
-                return Actor.Done;
+
+                return Task.CompletedTask;
             }
         }
     }

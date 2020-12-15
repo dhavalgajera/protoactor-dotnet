@@ -8,10 +8,6 @@ namespace Proto.TestFixtures
     public class TestMailboxStatistics : IMailboxStatistics
     {
         private readonly Func<object, bool> _waitForReceived;
-        public ManualResetEventSlim Reset { get; } = new ManualResetEventSlim();
-        public List<object> Stats { get; } = new List<object>();
-        public List<object> Posted { get; } = new List<object>();
-        public List<object> Received { get; } = new List<object>();
 
         public TestMailboxStatistics()
         {
@@ -21,6 +17,11 @@ namespace Proto.TestFixtures
         {
             _waitForReceived = waitForReceived;
         }
+
+        public ManualResetEventSlim Reset { get; } = new();
+        public List<object> Stats { get; } = new();
+        public List<object> Posted { get; } = new();
+        public List<object> Received { get; } = new();
 
         public void MailboxStarted()
         {
@@ -37,7 +38,7 @@ namespace Proto.TestFixtures
         {
             Stats.Add(message);
             Received.Add(message);
-            if (_waitForReceived != null && _waitForReceived(message))
+            if (_waitForReceived is not null && _waitForReceived(message))
                 Reset.Set();
         }
 

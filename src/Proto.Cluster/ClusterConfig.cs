@@ -1,68 +1,62 @@
 ﻿// -----------------------------------------------------------------------
-//   <copyright file="Cluster.cs" company="Asynkron HB">
-//       Copyright (C) 2015-2018 Asynkron HB All rights reserved
-//   </copyright>
+// <copyright file="ClusterConfig.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
+// </copyright>
 // -----------------------------------------------------------------------
-
 using System;
-using Proto.Remote;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
+using JetBrains.Annotations;
+using Proto.Cluster.IdentityLookup;
 
 namespace Proto.Cluster
 {
-    public class ClusterConfig
+    [PublicAPI]
+    public record ClusterConfig
     {
-        public string Name { get; }
-        public string Address { get; }
-        public int Port { get; }
+        private ClusterConfig(string clusterName, IClusterProvider clusterProvider, IIdentityLookup identityLookup)
+        {
+            ClusterName = clusterName ?? throw new ArgumentNullException(nameof(clusterName));
+            ClusterProvider = clusterProvider ?? throw new ArgumentNullException(nameof(clusterProvider));
+            TimeoutTimespan = TimeSpan.FromSeconds(5);
+            HeartBeatInterval = TimeSpan.FromSeconds(30);
+            MemberStrategyBuilder = (_, _) => new SimpleMemberStrategy();
+            ClusterKinds = ImmutableDictionary<string, Props>.Empty;
+            IdentityLookup = identityLookup;
+        }
+
+        public string ClusterName { get; }
+
+        public ImmutableDictionary<string, Props> ClusterKinds { get; init; }
+
         public IClusterProvider ClusterProvider { get; }
 
-        public RemoteConfig RemoteConfig { get; private set; }
-        public TimeSpan TimeoutTimespan { get; private set; }
-        public IMemberStatusValue InitialMemberStatusValue { get; private set; }
-        public IMemberStatusValueSerializer MemberStatusValueSerializer { get; private set; }
-        public Func<string, IMemberStrategy> MemberStrategyBuilder { get; private set; }
+        public TimeSpan TimeoutTimespan { get; init; }
 
-        public ClusterConfig(string name, string address, int port, IClusterProvider cp)
-        {
-            Name = name ?? throw new ArgumentNullException(nameof(name));
-            Address = address ?? throw new ArgumentNullException(nameof(address));
-            Port = port;
-            ClusterProvider = cp ?? throw new ArgumentNullException(nameof(cp));
-            
-            RemoteConfig = new RemoteConfig();
-            TimeoutTimespan = TimeSpan.FromSeconds(5);
-            MemberStatusValueSerializer = new NullMemberStatusValueSerializer();
-            MemberStrategyBuilder = kind => new SimpleMemberStrategy();
-        }
+        public Func<Cluster, string, IMemberStrategy> MemberStrategyBuilder { get; init; }
 
-        public ClusterConfig WithRemoteConfig(RemoteConfig remoteConfig)
-        {
-            RemoteConfig = remoteConfig;
-            return this;
-        }
+        public IIdentityLookup? IdentityLookup { get; }
+        public TimeSpan HeartBeatInterval { get; init; }
 
-        public ClusterConfig WithTimeoutSeconds(int timeoutSeconds)
-        {
-            TimeoutTimespan = TimeSpan.FromSeconds(timeoutSeconds);
-            return this;
-        }
+        public ClusterConfig WithTimeout(TimeSpan timeSpan) =>
+            this with {TimeoutTimespan = timeSpan};
 
-        public ClusterConfig WithInitialMemberStatusValue(IMemberStatusValue statusValue)
-        {
-            InitialMemberStatusValue = statusValue;
-            return this;
-        }
+        public ClusterConfig WithMemberStrategyBuilder(Func<Cluster, string, IMemberStrategy> builder) =>
+            this with {MemberStrategyBuilder = builder};
 
-        public ClusterConfig WithMemberStatusValueSerializer(IMemberStatusValueSerializer serializer)
-        {
-            MemberStatusValueSerializer = serializer;
-            return this;
-        }
+        public ClusterConfig WithClusterKind(string kind, Props prop) =>
+            this with { ClusterKinds = ClusterKinds.Add(kind, prop)};
 
-        public ClusterConfig WithMemberStrategyBuilder(Func<string, IMemberStrategy> builder)
-        {
-            MemberStrategyBuilder = builder;
-            return this;
-        }
+        public ClusterConfig WithClusterKinds(params (string kind, Props prop)[] knownKinds) =>
+            this with {
+                ClusterKinds = ClusterKinds
+                    .AddRange(knownKinds
+                        .Select(kk => new KeyValuePair<string, Props>(kk.kind, kk.prop))
+                    )};
+
+        public static ClusterConfig Setup(string clusterName, IClusterProvider clusterProvider,
+            IIdentityLookup identityLookup) =>
+            new(clusterName, clusterProvider, identityLookup);
     }
 }

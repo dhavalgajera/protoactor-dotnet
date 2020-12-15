@@ -1,4 +1,9 @@
-﻿using System;
+﻿// -----------------------------------------------------------------------
+// <copyright file="EventTypeStrategy.cs" company="Asynkron AB">
+//      Copyright (C) 2015-2020 Asynkron AB All rights reserved
+// </copyright>
+// -----------------------------------------------------------------------
+using System;
 
 namespace Proto.Persistence.SnapshotStrategies
 {
@@ -10,9 +15,7 @@ namespace Proto.Persistence.SnapshotStrategies
         {
             _eventType = eventType;
         }
-        public bool ShouldTakeSnapshot(PersistedEvent persistedEvent)
-        {
-            return persistedEvent.Data.GetType() == _eventType;
-        }
+
+        public bool ShouldTakeSnapshot(PersistedEvent persistedEvent) => persistedEvent.Data.GetType() == _eventType;
     }
 }
